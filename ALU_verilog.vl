@@ -1,0 +1,110 @@
+`define NUM_BITS 5
+module half_adder(output sum, output carry, input a, input b);
+    xor(sum, a, b);
+    and(carry, a, b);
+endmodule
+
+module full_adder(output sum, output carry, input x, input y, input z);
+    wire s1, c1, c2;
+    half_adder h1(s1, c1, x, y);
+    half_adder h2(sum, c2, s1, z);
+    or(carry, c1, c2);
+endmodule
+
+module mux(output choose, input a, input b, input c, input d, input s0, input s1);
+    wire not_s0, not_s1, first, second, third, forth;
+
+    not(not_s0, s0);
+    not(not_s1, s1);
+    and(first, not_s0,not_s1,a);
+    and(second, s0,not_s1,b);
+    and(third, not_s0,s1,c);
+    and(forth, s0,s1,d);
+
+    or(choose, first,second,third,forth);
+endmodule
+
+module arithmetic_circuit(output [N:0] D, output cout, input [N:0] A,input [N:0] B,input cin,input s0,input s1);
+    parameter N = `NUM_BITS-1;
+    wire [N:0] M;wire [N:0] no; wire [N:0] C;
+    wire x0=0;
+    wire x1= 1;
+    generate
+    genvar i;
+    for(i=0;i<=N;i=i+1)
+    begin
+        not(no[i], B[i]);
+        mux m(M[i],B[i],no[i],x0,x1,s0,s1);
+    end
+    endgenerate
+    full_adder f0(D[0],C[1],A[0],M[0],cin);
+    generate
+    genvar j;
+    for(j=1;j<=N-1;j=j+1)
+    begin
+        full_adder f(D[j],C[j+1],A[j],M[j],C[j]);
+    end
+    endgenerate
+    full_adder fN(D[N],cout,A[N],M[N],C[N]);
+endmodule
+
+module logic_circuit(output [N:0] E,input [N:0] A,input [N:0] B,input s0,input s1);
+    parameter N = `NUM_BITS-1;
+    wire [N:0] AandB;wire [N:0] AorB;wire [N:0] AxorB;wire [N:0] notA;
+    generate
+    genvar i;
+    for(i=0;i<=N;i=i+1)
+    begin
+        and(AandB[i], A[i],B[i]);
+        or(AorB[i], A[i],B[i]);
+        xor(AxorB[i], A[i],B[i]);
+        not(notA[i], A[i]);
+        mux m(E[i], AandB[i],AorB[i],AxorB[i],notA[i],s0,s1);
+    end
+    endgenerate
+endmodule
+
+
+module ALU_circuit(output [N:0] Out, output cout, input [N:0] A, input [N:0] B, input cin, input s0, input s1, input s2, input s3);
+    parameter N = `NUM_BITS-1;
+    wire [N:0] D; wire [N:0] E;
+
+    arithmetic_circuit ac (D, cout, A, B, cin, s0, s1);
+    logic_circuit lc (E, A, B, s0, s1);
+
+    wire x0=0;
+
+    mux mo(Out[0], D[0],E[0],x0,A[1],s2,s3);
+    generate
+    genvar k;
+    for(k=1;k<=N-1;k=k+1)
+    begin
+        mux m(Out[k], D[k],E[k],A[k-1],A[k+1],s2,s3);
+    end
+    endgenerate
+    mux mN(Out[N],D[N], E[N], A[N-1], A[N], s2, s3);
+
+endmodule
+//change selection and input to get different results.
+module Test_ALU();
+    parameter N = `NUM_BITS-1;
+    reg [N:0] a; reg [N:0] b;
+    wire s3 = 0; wire s2 = 0; wire s1 = 0; wire s0 = 0;
+    wire c = 0; wire [N:0] out; wire cout;
+
+    ALU_circuit alu_test (out, cout, a, b, c, s0, s1, s2, s3);// add (a+b).
+
+    reg [N:0] x; reg [N:0] y;
+    wire S3 = 1; wire S2 = 1; wire S1 = 0; wire S0 = 0;
+    wire C = 0; wire [N:0] Out; wire Cout;
+
+    ALU_circuit alu_test2 (Out, Cout, x, y, c, S0, S1, S2, S3);// shift right a.
+    initial
+        begin
+            a=30;b=2;
+            x=18;y=4;
+            $monitor(" A=%b, B=%b, Selecion=%b%b%b%b, Cin=%b, Out=(%b)%b",a, b, s3, s2, s1, s0, c, cout, out,
+                 "\n X=%b, Y=%b, Selecion=%b%b%b%b, Cin=%b, Out=(%b)%b", x, y, S3, S2, S1, S0, C, Cout, Out);
+        end
+
+endmodule
